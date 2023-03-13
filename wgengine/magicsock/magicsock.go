@@ -1727,7 +1727,16 @@ func (c *Conn) runDerpReader(ctx context.Context, derpFakeAddr netip.AddrPort, d
 		case derp.HealthMessage:
 			health.SetDERPRegionHealth(regionID, m.Problem)
 		case derp.PeerGoneMessage:
-			c.removeDerpPeerRoute(key.NodePublic(m), regionID, dc)
+			switch m.Reason {
+			case derp.PeerGoneReasonDisconnected:
+			case derp.PeerGoneReasonNotHere:
+				c.logf("magicsock: derp-%d does not know about peer %s, removing route",
+					regionID, key.NodePublic(m.Peer).ShortString())
+			default:
+				c.logf("magicsock: derp-%d peer %s gone, reason %v, removing route",
+					regionID, m.Reason, key.NodePublic(m.Peer).ShortString())
+			}
+			c.removeDerpPeerRoute(key.NodePublic(m.Peer), regionID, dc)
 		default:
 			// Ignore.
 			continue

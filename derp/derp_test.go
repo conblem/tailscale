@@ -54,6 +54,7 @@ func TestSendRecv(t *testing.T) {
 	const numClients = 3
 	var clientPrivateKeys []key.NodePrivate
 	var clientKeys []key.NodePublic
+	nonExistentClientKey := key.NewNode()
 	for i := 0; i < numClients; i++ {
 		priv := key.NewNode()
 		clientPrivateKeys = append(clientPrivateKeys, priv)
@@ -105,7 +106,8 @@ func TestSendRecv(t *testing.T) {
 		t.Logf("Connected client %d.", i)
 	}
 
-	var peerGoneCount expvar.Int
+	var peerGoneCountDisconnected expvar.Int
+	var peerGoneCountNotHere expvar.Int
 
 	t.Logf("Starting read loops")
 	for i := 0; i < numClients; i++ {
@@ -121,7 +123,14 @@ func TestSendRecv(t *testing.T) {
 					t.Errorf("unexpected message type %T", m)
 					continue
 				case PeerGoneMessage:
-					peerGoneCount.Add(1)
+					switch m.Reason {
+					case PeerGoneReasonDisconnected:
+						peerGoneCountDisconnected.Add(1)
+					case PeerGoneReasonNotHere:
+						peerGoneCountNotHere.Add(1)
+					default:
+						t.Errorf("unexpected PeerGone reason %v", m.Reason)
+					}
 				case ReceivedPacket:
 					if m.Source.IsZero() {
 						t.Errorf("zero Source address in ReceivedPacket")
@@ -171,7 +180,19 @@ func TestSendRecv(t *testing.T) {
 		var got int64
 		dl := time.Now().Add(5 * time.Second)
 		for time.Now().Before(dl) {
-			if got = peerGoneCount.Value(); got == want {
+			if got = peerGoneCountDisconnected.Value(); got == want {
+				return
+			}
+		}
+		t.Errorf("peer gone count = %v; want %v", got, want)
+	}
+
+	wantUnknownPeers := func(want int64) {
+		t.Helper()
+		var got int64
+		dl := time.Now().Add(5 * time.Second)
+		for time.Now().Before(dl) {
+			if got = peerGoneCountNotHere.Value(); got == want {
 				return
 			}
 		}
@@ -193,6 +214,12 @@ func TestSendRecv(t *testing.T) {
 	recv(2, string(msg2))
 	recvNothing(0)
 	recvNothing(1)
+
+	msg3 := []byte("hello 1->non-existent node\n")
+	if err := clients[1].Send(nonExistentClientKey.Public(), msg3); err != nil {
+		t.Fatal(err)
+	}
+	wantUnknownPeers(1)
 
 	wantActive(3, 0)
 	clients[0].NotePreferred(true)
@@ -595,9 +622,13 @@ func (tc *testClient) wantGone(t *testing.T, peer key.NodePublic) {
 	}
 	switch m := m.(type) {
 	case PeerGoneMessage:
-		got := key.NodePublic(m)
+		got := key.NodePublic(m.Peer)
 		if peer != got {
 			t.Errorf("got gone message for %v; want gone for %v", tc.ts.keyName(got), tc.ts.keyName(peer))
+		}
+		reason := m.Reason
+		if reason != PeerGoneReasonDisconnected {
+			t.Errorf("got gone message for reason %v; wanted %v", reason, PeerGoneReasonDisconnected)
 		}
 	default:
 		t.Fatalf("unexpected message type %T", m)

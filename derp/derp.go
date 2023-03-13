@@ -77,8 +77,10 @@ const (
 	// a previous sender is no longer connected. That is, if A
 	// sent to B, and then if A disconnects, the server sends
 	// framePeerGone to B so B can forget that a reverse path
-	// exists on that connection to get back to A.
-	framePeerGone = frameType(0x08) // 32B pub key of peer that's gone
+	// exists on that connection to get back to A. It is also sent
+	// if A tries to send to B and the server has no record of B
+	// (which currently would only happen if there was a bug).
+	framePeerGone = frameType(0x08) // 32B pub key of peer that's gone + 1 byte reason
 
 	// framePeerPresent is like framePeerGone, but for other
 	// members of the DERP region when they're meshed up together.
@@ -114,6 +116,14 @@ const (
 	// and how long to try total. See ServerRestartingMessage docs for
 	// more details on how the client should interpret them.
 	frameRestarting = frameType(0x15)
+)
+
+type PeerGoneReasonType byte
+
+// Explanation of why the server is sending a peerGone message
+const (
+	PeerGoneReasonDisconnected = PeerGoneReasonType(0x00) // peer disconnected from this server
+	PeerGoneReasonNotHere      = PeerGoneReasonType(0x01) // server doesn't know about this peer, unexpected
 )
 
 var bin = binary.BigEndian
