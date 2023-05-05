@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -46,7 +45,6 @@ import (
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/ipn/policy"
 	"tailscale.com/log/sockstatlog"
-	"tailscale.com/logpolicy"
 	"tailscale.com/net/dns"
 	"tailscale.com/net/dnscache"
 	"tailscale.com/net/dnsfallback"
@@ -311,15 +309,6 @@ func NewLocalBackend(logf logger.Logf, logID logid.PublicID, store ipn.StateStor
 		em:             newExpiryManager(logf),
 		gotPortPollRes: make(chan struct{}),
 		loginFlags:     loginFlags,
-	}
-
-	b.sockstatLogger, err = sockstatlog.NewLogger(logpolicy.LogsDir(logf), logf, logID, e.GetNetMon())
-	if err != nil {
-		log.Printf("error setting up sockstat logger: %v", err)
-	}
-	// Enable sockstats logs only on unstable builds
-	if version.IsUnstableBuild() && b.sockstatLogger != nil {
-		b.sockstatLogger.SetLoggingEnabled(true)
 	}
 
 	// Default filter blocks everything and logs nothing, until Start() is called.
