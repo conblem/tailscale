@@ -21,6 +21,11 @@ func runBuildPkg() {
 		log.Fatalf("Cannot setup: %v", err)
 	}
 
+	log.Printf("Linting...\n")
+	if err := runYarn("lint"); err != nil {
+		log.Fatalf("Linting failed: %v", err)
+	}
+
 	if err := cleanDir(*pkgDir); err != nil {
 		log.Fatalf("Cannot clean %s: %v", *pkgDir, err)
 	}
